@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlagiarismShield — Local AI Detection Suite</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0d14;--bg2:#10141f;--bg3:#161c2e;
+  --card:#111827;--card2:#1a2235;
+  --border:#1e2d4a;--border2:#2a3f6a;
+  --text:#dde4f0;--text2:#7a8cad;--text3:#445069;
+  --gold:#f0b429;--gold2:#c98a00;
+  --blue:#3d8ef8;--blue2:#1050c8;--blue-light:#0d1e45;
+  --green:#10d97e;--green-light:#062418;
+  --red:#f04d4d;--red-light:#280a0a;
+  --orange:#f5a623;--orange-light:#291500;
+  --purple:#9b6cf7;--purple-light:#160a30;
+  --cyan:#00d4c8;--cyan-light:#001f1d;
+  --radius:14px;--radius-sm:8px;
+  --shadow:0 8px 32px rgba(0,0,0,.5);
+  --font-head:'Syne',sans-serif;
+  --font-body:'DM Sans',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+html{scroll-behavior:smooth}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;font-size:14px;line-height:1.6}
+
+/* ─── NOISE OVERLAY ─── */
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.5}
+
+/* ─── HEADER ─── */
+.header{background:rgba(10,13,20,.85);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;backdrop-filter:blur(16px)}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--gold),#c96a00);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 16px rgba(240,180,41,.25)}
+.logo-text{font-family:var(--font-head);font-size:19px;font-weight:800;letter-spacing:-.3px}
+.logo-text span{color:var(--gold)}
+.logo-sub{font-size:10px;color:var(--text3);margin-top:1px;font-family:var(--font-mono);letter-spacing:.05em}
+.badge-local{background:var(--green-light);color:var(--green);border:1px solid rgba(16,217,126,.2);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;font-family:var(--font-mono)}
+
+/* ─── TABS ─── */
+.main{max-width:1140px;margin:0 auto;padding:28px 20px 80px;position:relative;z-index:1}
+.tabs{display:flex;gap:2px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:0}
+.tab{padding:10px 22px 12px;border:none;background:none;color:var(--text3);font-family:var(--font-body);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;border-radius:6px 6px 0 0;white-space:nowrap}
+.tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* ─── CARDS ─── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-hdr{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--card2)}
+.card-title{font-family:var(--font-head);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text2)}
+
+/* ─── UPLOAD ZONES ─── */
+.drop-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px}
+.drop-zone{border:2px dashed var(--border2);border-radius:10px;padding:26px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
+.drop-zone:hover,.drop-zone.over{border-color:var(--gold);background:rgba(240,180,41,.04)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.drop-icon{font-size:28px;margin-bottom:8px}
+.drop-title{font-family:var(--font-head);font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px}
+.drop-sub{font-size:11px;color:var(--text3)}
+.file-pill{display:none;align-items:center;gap:8px;background:rgba(240,180,41,.08);border:1px solid rgba(240,180,41,.25);border-radius:8px;padding:7px 12px;margin:10px 16px 0;font-size:12px}
+.file-pill.show{display:flex}
+.file-pill-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--gold);font-weight:500;font-family:var(--font-mono)}
+.file-pill-rm{cursor:pointer;color:var(--text3);font-size:16px;flex-shrink:0}.file-pill-rm:hover{color:var(--red)}
+
+/* ─── TEXTAREA ─── */
+.text-area-wrap{padding:14px 16px}
+.doc-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+textarea{width:100%;min-height:160px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.7;resize:vertical;outline:none;transition:border-color .2s}
+textarea:focus{border-color:var(--blue)}
+textarea::placeholder{color:var(--text3)}
+.txt-label{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.08em}
+
+/* ─── BUTTONS ─── */
+.actions{padding:14px 16px;display:flex;gap:8px;border-top:1px solid var(--border);align-items:center;flex-wrap:wrap}
+.btn{padding:10px 20px;border:none;border-radius:var(--radius-sm);font-family:var(--font-body);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}
+.btn-primary{background:linear-gradient(135deg,var(--gold),#c98000);color:#0a0d14}
+.btn-primary:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed;transform:none;filter:none}
+.btn-outline{background:transparent;color:var(--text2);border:1px solid var(--border2)}
+.btn-outline:hover{border-color:var(--text2);color:var(--text);background:rgba(255,255,255,.03)}
+.btn-green{background:linear-gradient(135deg,#0fa060,#077a48);color:#fff}
+.btn-green:hover{filter:brightness(1.1)}
+
+/* ─── SPINNER ─── */
+.loader{display:none;flex-direction:column;align-items:center;padding:44px;gap:16px}
+.loader.on{display:flex}
+.spinner{width:38px;height:38px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-steps{display:flex;flex-direction:column;gap:6px;min-width:260px}
+.lstep{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3);padding:6px 10px;border-radius:6px;transition:all .3s}
+.lstep.on{color:var(--text);background:rgba(240,180,41,.07);font-weight:500}
+.lstep.done{color:var(--green)}
+.ldot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* ─── RESULTS ─── */
+.results{display:none;margin-top:20px}.results.on{display:block}
+
+/* Score ring */
+.score-ring-wrap{display:flex;flex-direction:column;align-items:center;padding:24px}
+.ring-svg{transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:var(--border)}
+.ring-fg{fill:none;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1),stroke .5s}
+.ring-num{font-family:var(--font-mono);font-size:28px;font-weight:600;fill:var(--text)}
+.ring-lbl{font-size:10px;fill:var(--text2);text-anchor:middle;font-family:var(--font-mono)}
+
+/* Stat grid */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:14px 16px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center}
+.stat-val{font-family:var(--font-mono);font-size:22px;font-weight:600;line-height:1}
+.stat-key{font-size:11px;color:var(--text3);margin-top:4px;font-weight:500}
+
+/* Verdict badge */
+.verdict{display:inline-flex;align-items:center;gap:6px;padding:6px 18px;border-radius:20px;font-size:12px;font-weight:700;font-family:var(--font-mono);border:1px solid;letter-spacing:.03em}
+.verdict.exact{background:var(--red-light);color:var(--red);border-color:rgba(240,77,77,.3)}
+.verdict.high{background:var(--orange-light);color:var(--orange);border-color:rgba(245,166,35,.3)}
+.verdict.moderate{background:rgba(240,180,41,.08);color:var(--gold);border-color:rgba(240,180,41,.3)}
+.verdict.low{background:var(--blue-light);color:var(--blue);border-color:rgba(61,142,248,.3)}
+.verdict.unique{background:var(--green-light);color:var(--green);border-color:rgba(16,217,126,.3)}
+
+/* Spans */
+.spans-section{margin:14px 16px 0}
+.span-group-title{font-family:var(--font-mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:8px;margin-top:14px}
+.span-pair{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px}
+.span-pair-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.span-sent{font-size:12px;line-height:1.6;color:var(--text)}
+.span-sent em{color:var(--text3);font-style:normal;font-size:10px;display:block;margin-bottom:3px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.05em}
+.span-score{font-size:11px;color:var(--text3);margin-top:6px;text-align:right;font-family:var(--font-mono)}
+
+/* ─── AI DETECTION — UPGRADED ─── */
+
+/* Main gauge card in Compare tab */
+.ai-gauges{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 16px}
+.ai-gauge{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px}
+.ai-doc-name{font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.ai-pct{font-family:var(--font-mono);font-size:28px;font-weight:600;line-height:1}
+.ai-bar-bg{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin:10px 0}
+.ai-bar-fg{height:100%;border-radius:3px;transition:width 1.2s cubic-bezier(.2,.8,.2,1)}
+.ai-verdict-line{font-size:11px;color:var(--text2);margin-top:4px}
+
+/* Sub-score breakdown bar */
+.subscore-row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:11px}
+.subscore-label{color:var(--text3);width:100px;flex-shrink:0;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.subscore-track{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.subscore-fill{height:100%;border-radius:3px;transition:width 1s ease}
+.subscore-num{color:var(--text2);width:26px;text-align:right;font-family:var(--font-mono);font-size:10px}
+
+/* Explanation reasons */
+.reasons-list{margin-top:12px;display:flex;flex-direction:column;gap:5px}
+.reason-item{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:6px;font-size:12px;line-height:1.5}
+.reason-item.ai-signal{background:rgba(240,77,77,.06);border-left:2px solid var(--red)}
+.reason-item.human-signal{background:rgba(16,217,126,.05);border-left:2px solid var(--green)}
+.reason-item.neutral{background:rgba(255,255,255,.03);border-left:2px solid var(--border2)}
+.reason-icon{font-size:12px;flex-shrink:0;margin-top:1px}
+
+/* Score breakdown grid */
+.score-breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.sb-item{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+.sb-val{font-family:var(--font-mono);font-size:16px;font-weight:600}
+.sb-key{font-size:10px;color:var(--text3);margin-top:3px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.05em}
+
+/* Big AI detect tab layout */
+.ai-detect-grid{display:grid;grid-template-columns:1fr 320px;gap:16px;padding:16px}
+.ai-main-panel{display:flex;flex-direction:column;gap:14px}
+.ai-side-panel{display:flex;flex-direction:column;gap:14px}
+
+/* Gauge ring for single doc */
+.gauge-ring-wrap{display:flex;flex-direction:column;align-items:center;padding:20px 10px}
+.gauge-ring-label{font-family:var(--font-mono);font-size:11px;color:var(--text2);text-align:center;margin-top:8px;text-transform:uppercase;letter-spacing:.07em}
+
+/* Signal radar bars */
+.signal-bars{padding:16px}
+.signal-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.signal-bar-name{font-family:var(--font-mono);font-size:10px;color:var(--text2);width:90px;flex-shrink:0;text-transform:uppercase;letter-spacing:.04em}
+.signal-bar-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;position:relative}
+.signal-bar-fill{height:100%;border-radius:4px;transition:width 1.2s cubic-bezier(.2,.8,.2,1);position:relative}
+.signal-bar-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 60%,rgba(255,255,255,.15))}
+.signal-bar-val{font-family:var(--font-mono);font-size:10px;color:var(--text3);width:34px;text-align:right}
+
+/* Verdict display */
+.verdict-display{padding:16px;text-align:center;border-bottom:1px solid var(--border)}
+.verdict-score-big{font-family:var(--font-mono);font-size:56px;font-weight:600;line-height:1;margin-bottom:6px}
+.verdict-label-big{font-family:var(--font-head);font-size:15px;font-weight:700;letter-spacing:.02em;margin-bottom:10px}
+
+/* Explainability box */
+.explain-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.explain-hdr{padding:10px 14px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;display:flex;align-items:center;gap:6px}
+.explain-body{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.explain-tag{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:12px;font-size:11px;font-family:var(--font-mono)}
+.explain-tag.pos{background:rgba(240,77,77,.1);color:#f07070;border:1px solid rgba(240,77,77,.2)}
+.explain-tag.neg{background:rgba(16,217,126,.08);color:#40d98e;border:1px solid rgba(16,217,126,.15)}
+
+/* Feature metrics cards */
+.feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.feat-card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.feat-val{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text)}
+.feat-key{font-size:10px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.04em;font-family:var(--font-mono)}
+
+/* Pipeline stages */
+.pipeline-stages{padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.stage-row{display:flex;gap:10px;align-items:flex-start;font-size:12px;padding:7px 12px;background:var(--bg2);border-radius:6px}
+.stage-icon{width:20px;flex-shrink:0;color:var(--gold)}
+.stage-key{color:var(--text3);width:130px;flex-shrink:0;font-weight:500;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.stage-val{color:var(--text);font-family:var(--font-mono);font-size:11px}
+
+/* Dataset */
+.eval-table{width:100%;border-collapse:collapse;font-size:13px;margin:14px 0}
+.eval-table th{padding:10px 14px;text-align:left;background:var(--bg2);color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-family:var(--font-mono)}
+.eval-table td{padding:10px 14px;border-bottom:1px solid var(--border)}
+.eval-table tr:last-child td{border-bottom:none}
+.metric-bar-wrap{display:flex;align-items:center;gap:8px}
+.metric-bar{height:5px;background:var(--border);border-radius:3px;flex:1;overflow:hidden}
+.metric-bar-fill{height:100%;border-radius:3px;background:var(--blue);transition:width 1s ease}
+.dataset-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:14px 16px}
+.ds-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
+.ds-name{font-family:var(--font-head);font-size:13px;font-weight:700;margin-bottom:6px;color:var(--text)}
+.ds-detail{font-size:11px;color:var(--text3);line-height:1.6}
+.ds-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin-top:6px;font-family:var(--font-mono)}
+.ds-badge.gold{background:rgba(240,180,41,.12);color:var(--gold)}
+.ds-badge.blue{background:var(--blue-light);color:var(--blue)}
+.ds-badge.green{background:var(--green-light);color:var(--green)}
+.ds-badge.purple{background:var(--purple-light);color:var(--purple)}
+.info-box{padding:12px 16px;background:rgba(61,142,248,.05);border-left:3px solid var(--blue);margin:14px 16px 0;border-radius:0 6px 6px 0}
+.info-box p{font-size:12px;color:var(--text2);line-height:1.6}
+.info-box code{background:var(--bg);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:11px;color:var(--gold)}
+.err{background:var(--red-light);border:1px solid rgba(240,77,77,.3);border-radius:var(--radius-sm);padding:12px 16px;color:var(--red);font-size:13px;margin:14px 16px}
+
+@media(max-width:900px){.ai-detect-grid{grid-template-columns:1fr}}
+@media(max-width:640px){
+  .drop-grid,.doc-row,.span-pair-row,.ai-gauges,.stat-grid,.score-breakdown{grid-template-columns:1fr}
+  .header{padding:14px 16px}
+  .ai-detect-grid{grid-template-columns:1fr}
+  .score-breakdown{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">🛡️</div>
+    <div>
+      <div class="logo-text">Plagiarism<span>Shield</span></div>
+      <div class="logo-sub">LOCAL AI DETECTION SUITE · NO EXTERNAL APIS</div>
+    </div>
+  </div>
+  <span class="badge-local">✓ 100% Local</span>
+</header>
+
+<main class="main">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('compare')">📄 Compare Documents</button>
+    <button class="tab" onclick="switchTab('aidetect')">🤖 AI Detection</button>
+    <button class="tab" onclick="switchTab('batch')">📦 Batch Upload</button>
+    <button class="tab" onclick="switchTab('datasets')">📊 Datasets & Eval</button>
+  </div>
+
+  <!-- ══ TAB 1: Compare Documents ══ -->
+  <div id="tab-compare" class="tab-panel active">
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">Document Comparison</span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">Upload files or paste text</span>
+      </div>
+      <div class="drop-grid">
+        <div>
+          <div class="drop-zone" id="zone-a" ondragover="onDrag(event,this)" ondragleave="offDrag(this)" ondrop="onDrop(event,'a')">
+            <input type="file" id="file-a" accept=".txt,.pdf,.docx" onchange="onFile('a')">
+            <div class="drop-icon">📄</div>
+            <div class="drop-title">Document A</div>
+            <div class="drop-sub">Drop file or click to browse<br><small>TXT · PDF · DOCX</small></div>
+          </div>
+          <div class="file-pill" id="pill-a"><span class="file-pill-name" id="pill-a-name"></span><span class="file-pill-rm" onclick="clearFile('a')">✕</span></div>
+        </div>
+        <div>
+          <div class="drop-zone" id="zone-b" ondragover="onDrag(event,this)" ondragleave="offDrag(this)" ondrop="onDrop(event,'b')">
+            <input type="file" id="file-b" accept=".txt,.pdf,.docx" onchange="onFile('b')">
+            <div class="drop-icon">📄</div>
+            <div class="drop-title">Document B</div>
+            <div class="drop-sub">Drop file or click to browse<br><small>TXT · PDF · DOCX</small></div>
+          </div>
+          <div class="file-pill" id="pill-b"><span class="file-pill-name" id="pill-b-name"></span><span class="file-pill-rm" onclick="clearFile('b')">✕</span></div>
+        </div>
+      </div>
+      <div style="padding:0 16px 4px;text-align:center;font-size:11px;color:var(--text3);font-family:var(--font-mono)">— or paste text below —</div>
+      <div class="text-area-wrap">
+        <div class="doc-row">
+          <div><div class="txt-label">Document A</div><textarea id="text-a" placeholder="Paste document A text here…"></textarea></div>
+          <div><div class="txt-label">Document B</div><textarea id="text-b" placeholder="Paste document B text here…"></textarea></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-compare" onclick="runCompare()">⚡ Analyse Locally</button>
+        <button class="btn btn-outline" onclick="clearCompare()">Clear</button>
+        <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--font-mono)">SBERT + MINHASH + DBSCAN</span>
+      </div>
+    </div>
+
+    <div class="loader" id="loader-compare">
+      <div class="spinner"></div>
+      <div class="loader-steps">
+        <div class="lstep" id="ls1"><div class="ldot"></div>Preprocessing text</div>
+        <div class="lstep" id="ls2"><div class="ldot"></div>MinHash deduplication</div>
+        <div class="lstep" id="ls3"><div class="ldot"></div>SBERT embeddings</div>
+        <div class="lstep" id="ls4"><div class="ldot"></div>Cosine similarity</div>
+        <div class="lstep" id="ls5"><div class="ldot"></div>Span detection</div>
+        <div class="lstep" id="ls6"><div class="ldot"></div>AI heuristic analysis</div>
+      </div>
+    </div>
+    <div class="err" id="err-compare" style="display:none"></div>
+
+    <div class="results" id="res-compare">
+      <div class="card" style="margin-top:0">
+        <div class="card-hdr"><span class="card-title">Similarity Score</span></div>
+        <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:20px;padding:20px">
+          <div class="score-ring-wrap">
+            <svg width="140" height="140" class="ring-svg" viewBox="0 0 140 140">
+              <circle class="ring-bg" cx="70" cy="70" r="58" stroke-width="10"/>
+              <circle class="ring-fg" id="ring-fg" cx="70" cy="70" r="58" stroke-width="10" stroke-dasharray="364" stroke-dashoffset="364"/>
+              <text x="70" y="78" text-anchor="middle" class="ring-num" id="ring-num" style="transform:rotate(90deg);transform-origin:70px 70px">0%</text>
+              <text x="70" y="93" text-anchor="middle" class="ring-lbl" style="transform:rotate(90deg);transform-origin:70px 70px">SIMILARITY</text>
+            </svg>
+          </div>
+          <div style="text-align:center">
+            <div id="verdict-badge" class="verdict unique">✓ Unique</div>
+            <div class="stat-grid" style="margin-top:10px;padding:0">
+              <div class="stat"><div class="stat-val" id="stat-cosine">—</div><div class="stat-key">Cosine</div></div>
+              <div class="stat"><div class="stat-val" id="stat-minhash">—</div><div class="stat-key">MinHash</div></div>
+              <div class="stat"><div class="stat-val" id="stat-spans">—</div><div class="stat-key">Spans</div></div>
+              <div class="stat"><div class="stat-val" id="stat-words-a">—</div><div class="stat-key">Words A</div></div>
+              <div class="stat"><div class="stat-val" id="stat-words-b">—</div><div class="stat-key">Words B</div></div>
+              <div class="stat"><div class="stat-val" id="stat-lang">—</div><div class="stat-key">Language</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="card-hdr"><span class="card-title">Matching Spans</span></div>
+        <div class="spans-section" id="spans-output"></div>
+        <div style="padding:10px 16px"></div>
+      </div>
+
+      <!-- AI Detection — Compare tab: rich gauges -->
+      <div class="card" style="margin-top:14px">
+        <div class="card-hdr">
+          <span class="card-title">AI Authorship Detection</span>
+          <span style="font-size:10px;color:var(--text3);font-family:var(--font-mono)">Heuristic · Perplexity · Stylometric</span>
+        </div>
+        <div class="ai-gauges" id="ai-gauges"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="card-hdr"><span class="card-title">Pipeline Stages</span></div>
+        <div class="pipeline-stages" id="pipeline-stages"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB 2: AI Detection ══ -->
+  <div id="tab-aidetect" class="tab-panel">
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">Local AI Text Detection</span>
+        <span style="font-size:10px;color:var(--text3);font-family:var(--font-mono)">Runs on-device · 0 API calls</span>
+      </div>
+      <div class="text-area-wrap">
+        <div class="txt-label">Paste text to analyse</div>
+        <textarea id="ai-text" rows="9" placeholder="Paste any text here to detect AI authorship…
+
+The engine uses 6 heuristic signals (perplexity · burstiness · vocabulary richness · repetition · formal tone · human markers) fused with a local transformer classifier and GPT-2 perplexity scoring."></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="runAIDetect()">🔍 Detect AI Authorship</button>
+        <button class="btn btn-outline" onclick="document.getElementById('ai-text').value=''">Clear</button>
+        <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--font-mono)">6-SIGNAL HEURISTIC ENGINE</span>
+      </div>
+    </div>
+
+    <div class="loader" id="loader-ai">
+      <div class="spinner"></div>
+      <div style="font-size:13px;color:var(--text2);font-family:var(--font-mono)">Running heuristic pipeline…</div>
+    </div>
+    <div class="err" id="err-ai" style="display:none"></div>
+
+    <div class="results" id="res-ai">
+      <div class="ai-detect-grid">
+
+        <!-- LEFT: main result -->
+        <div class="ai-main-panel">
+
+          <!-- Verdict + score -->
+          <div class="card">
+            <div class="verdict-display">
+              <div class="verdict-score-big" id="ai-pct-big">—</div>
+              <div class="verdict-label-big" id="ai-verdict-label">—</div>
+              <div id="ai-verdict-single" class="verdict unique" style="margin:0 auto">—</div>
+            </div>
+            <!-- Signal bars -->
+            <div class="signal-bars">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Signal Breakdown</div>
+              <div id="signal-bars-content"></div>
+            </div>
+          </div>
+
+          <!-- Sub-score breakdown cards -->
+          <div class="card">
+            <div class="card-hdr"><span class="card-title">Heuristic Sub-Scores</span></div>
+            <div style="padding:14px 16px">
+              <div class="score-breakdown" id="score-breakdown-grid"></div>
+              <div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-top:8px;text-align:right">MAX: perplexity 30 · burstiness 20 · repetition 15 · tone 15 · vocab 10 · human –10</div>
+            </div>
+          </div>
+
+          <!-- Explainability reasons -->
+          <div class="card">
+            <div class="card-hdr"><span class="card-title">Why This Score — Explainability</span></div>
+            <div style="padding:14px 16px">
+              <div id="ai-reasons-list" class="reasons-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: sidebar metrics -->
+        <div class="ai-side-panel">
+
+          <!-- Gauge ring -->
+          <div class="card">
+            <div class="gauge-ring-wrap">
+              <svg width="160" height="160" class="ring-svg" viewBox="0 0 160 160">
+                <circle class="ring-bg" cx="80" cy="80" r="66" stroke-width="12"/>
+                <circle class="ring-fg" id="ai-ring-fg" cx="80" cy="80" r="66" stroke-width="12" stroke-dasharray="415" stroke-dashoffset="415"/>
+                <text x="80" y="86" text-anchor="middle" class="ring-num" id="ai-ring-num" style="transform:rotate(90deg);transform-origin:80px 80px;font-size:32px">—</text>
+                <text x="80" y="104" text-anchor="middle" class="ring-lbl" style="transform:rotate(90deg);transform-origin:80px 80px">AI PROB</text>
+              </svg>
+              <div class="gauge-ring-label" id="ai-ring-verdict">ANALYSING…</div>
+            </div>
+          </div>
+
+          <!-- Feature measurements -->
+          <div class="card">
+            <div class="card-hdr"><span class="card-title">Feature Measurements</span></div>
+            <div style="padding:12px 14px">
+              <div class="feat-grid" id="feat-grid"></div>
+            </div>
+          </div>
+
+          <!-- Method info -->
+          <div class="card">
+            <div class="card-hdr"><span class="card-title">Detection Method</span></div>
+            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:6px" id="method-info"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB 3: Batch Upload ══ -->
+  <div id="tab-batch" class="tab-panel">
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">Batch Document Processing</span></div>
+      <div style="padding:16px">
+        <div class="drop-zone" id="zone-batch" style="max-width:100%" ondragover="onDrag(event,this)" ondragleave="offDrag(this)" ondrop="onDropBatch(event)">
+          <input type="file" id="files-batch" multiple accept=".txt,.pdf,.docx" onchange="onBatchFiles()">
+          <div class="drop-icon">📂</div>
+          <div class="drop-title">Drop multiple files here</div>
+          <div class="drop-sub">TXT · PDF · DOCX · Multiple files accepted</div>
+        </div>
+        <div id="batch-file-list" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-batch" onclick="runBatch()" disabled>🔄 Process Corpus</button>
+        <button class="btn btn-outline" onclick="clearBatch()">Clear All</button>
+      </div>
+    </div>
+    <div class="loader" id="loader-batch"><div class="spinner"></div><div style="font-size:13px;color:var(--text2)">Processing corpus… (SBERT + DBSCAN)</div></div>
+    <div class="err" id="err-batch" style="display:none"></div>
+    <div class="results" id="res-batch">
+      <div class="card" style="margin-top:0">
+        <div class="card-hdr"><span class="card-title">Batch Results</span></div>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-val" id="b-processed">—</div><div class="stat-key">Processed</div></div>
+          <div class="stat"><div class="stat-val" id="b-clusters">—</div><div class="stat-key">Clusters</div></div>
+        </div>
+        <div id="b-cluster-details" style="padding:0 16px 16px"></div>
+        <div id="b-similarity-details" style="padding:0 16px 16px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB 4: Datasets & Eval ══ -->
+  <div id="tab-datasets" class="tab-panel">
+    <div class="card">
+      <div class="card-hdr"><span class="card-title">Supported Datasets</span></div>
+      <div class="dataset-cards">
+        <div class="ds-card"><div class="ds-name">🏆 PAN Plagiarism Corpus 2011</div><div class="ds-detail">Gold standard. External + intrinsic detection tasks. 27,073 suspicious docs, XML ground-truth annotations.</div><span class="ds-badge gold">Most Important</span></div>
+        <div class="ds-card"><div class="ds-name">🤖 PAN-2025 AI Plagiarism</div><div class="ds-detail">AI-generated paraphrasing via LLaMA 3, Mistral, Gemma. JSONL format with human/AI labels.</div><span class="ds-badge blue">AI Detection</span></div>
+        <div class="ds-card"><div class="ds-name">🌍 ExAra Corpus PAN-2015</div><div class="ds-detail">Arabic + multilingual external resource alignment. Suspicious + source docs, XML annotations.</div><span class="ds-badge purple">Multilingual</span></div>
+        <div class="ds-card"><div class="ds-name">📚 Project Gutenberg</div><div class="ds-detail">Open-license reference texts. Auto-stripped boilerplate, chunked into 3000-char overlapping windows.</div><span class="ds-badge green">Source Corpus</span></div>
+      </div>
+      <div class="info-box"><p>Place dataset zips inside <code>data/</code> folder next to <code>manage.py</code>. PAN-2011 part files (<code>.part1</code>, <code>.part2</code>) are handled automatically. PAN-2025 train split is skipped by default (23 GB) — set <code>load_train=True</code> in DataLoader if needed.</p></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-hdr"><span class="card-title">Run Pipeline on Datasets</span></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label class="txt-label">Output directory (optional)</label>
+          <input type="text" id="output-dir" placeholder="/path/to/pan_output"
+            style="width:100%;margin-top:6px;padding:9px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font-mono);font-size:12px;outline:none">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="runDataset()">▶ Run Pipeline</button>
+          <button class="btn btn-green" onclick="runEval('pan2011')">📊 Evaluate vs PAN-2011</button>
+          <button class="btn btn-outline" onclick="runEval('pan2015')">📊 Evaluate vs PAN-2015</button>
+        </div>
+      </div>
+      <div class="loader" id="loader-ds"><div class="spinner"></div><div style="font-size:13px;color:var(--text2)">Running pipeline…</div></div>
+      <div class="err" id="err-ds" style="display:none"></div>
+      <div class="results" id="res-ds">
+        <div id="ds-stat-grid" class="stat-grid"></div>
+        <div id="ds-eval-table" style="padding:0 16px 16px"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────────────────────
+function switchTab(id){
+  document.querySelectorAll('.tab').forEach((t,i)=>{
+    const tabs=['compare','aidetect','batch','datasets'];
+    t.classList.toggle('active',tabs[i]===id);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+function onDrag(e,el){e.preventDefault();el.classList.add('over')}
+function offDrag(el){el.classList.remove('over')}
+function onDrop(e,side){e.preventDefault();offDrag(document.getElementById('zone-'+side));const f=e.dataTransfer.files[0];if(f)setFile(side,f)}
+function onDropBatch(e){e.preventDefault();offDrag(document.getElementById('zone-batch'));addBatchFiles(e.dataTransfer.files)}
+function onFile(side){const f=document.getElementById('file-'+side).files[0];if(f)setFile(side,f)}
+function setFile(side,file){window['_file_'+side]=file;document.getElementById('pill-'+side+'-name').textContent=file.name;document.getElementById('pill-'+side).classList.add('show')}
+function clearFile(side){window['_file_'+side]=null;document.getElementById('file-'+side).value='';document.getElementById('pill-'+side).classList.remove('show')}
+
+// ── Batch files ───────────────────────────────────────────────────────────────
+let _batchFiles=[];
+function onBatchFiles(){addBatchFiles(document.getElementById('files-batch').files)}
+function addBatchFiles(files){for(const f of files)_batchFiles.push(f);renderBatchList()}
+function renderBatchList(){
+  document.getElementById('batch-file-list').innerHTML=_batchFiles.map((f,i)=>
+    `<span style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-family:var(--font-mono);display:flex;align-items:center;gap:6px">
+      📄 ${f.name}<span onclick="removeBatchFile(${i})" style="cursor:pointer;color:var(--text3)">✕</span></span>`
+  ).join('');
+  document.getElementById('btn-batch').disabled=_batchFiles.length===0;
+}
+function removeBatchFile(i){_batchFiles.splice(i,1);renderBatchList()}
+function clearBatch(){_batchFiles=[];document.getElementById('files-batch').value='';renderBatchList();document.getElementById('b-cluster-details').innerHTML='';document.getElementById('b-similarity-details').innerHTML='';document.getElementById('res-batch').classList.remove('on')}
+
+// ── Compare ───────────────────────────────────────────────────────────────────
+async function runCompare(){
+  const fileA=window._file_a,fileB=window._file_b;
+  const txtA=document.getElementById('text-a').value.trim();
+  const txtB=document.getElementById('text-b').value.trim();
+  if(!fileA&&!fileB&&(!txtA||!txtB)){showErr('err-compare','Please upload files or paste text in both fields.');return}
+  setLoading('compare',true);
+  let si=0;
+  const stepInt=setInterval(()=>{
+    if(si<6){if(si>0)document.getElementById('ls'+si).classList.replace('on','done');document.getElementById('ls'+(si+1)).classList.add('on');si++;}
+  },500);
+  const form=new FormData();
+  if(fileA)form.append('doc_a',fileA);else form.append('doc_a',new Blob([txtA],{type:'text/plain'}),'doc_a.txt');
+  if(fileB)form.append('doc_b',fileB);else form.append('doc_b',new Blob([txtB],{type:'text/plain'}),'doc_b.txt');
+  try{
+    const r=await fetch('/api/similarity/',{method:'POST',body:form});
+    const data=await r.json();
+    clearInterval(stepInt);
+    [1,2,3,4,5,6].forEach(i=>document.getElementById('ls'+i).className='lstep done');
+    setLoading('compare',false);
+    if(data.error){showErr('err-compare',data.error);return}
+    renderCompareResults(data);
+  }catch(e){clearInterval(stepInt);setLoading('compare',false);showErr('err-compare','Request failed: '+e.message)}
+}
+
+function renderCompareResults(d){
+  const sim=d.similarity,pct=sim.overall_pct||0,circ=364;
+  const fg=document.getElementById('ring-fg');
+  fg.style.strokeDashoffset=circ-(pct/100)*circ;
+  fg.style.stroke=pct>=80?'#f04d4d':pct>=60?'#f5a623':pct>=30?'#f0b429':'#10d97e';
+  document.getElementById('ring-num').textContent=pct+'%';
+  const vb=document.getElementById('verdict-badge');
+  const v=sim.verdict||'Unique';
+  const vmap={'Exact Duplicate':'exact','High Similarity':'high','Moderate Similarity':'moderate','Low Similarity':'low','Unique':'unique'};
+  vb.className='verdict '+(vmap[v]||'unique');vb.textContent=v;
+  document.getElementById('stat-cosine').textContent=(sim.cosine_score||0).toFixed(3);
+  document.getElementById('stat-minhash').textContent=(sim.minhash_jaccard||0).toFixed(3);
+  document.getElementById('stat-spans').textContent=d.spans?.total_matching||0;
+  document.getElementById('stat-words-a').textContent=d.doc_a?.words||'—';
+  document.getElementById('stat-words-b').textContent=d.doc_b?.words||'—';
+  document.getElementById('stat-lang').textContent=(d.doc_a?.language||'?')+'/'+(d.doc_b?.language||'?');
+
+  // Spans
+  const so=document.getElementById('spans-output');
+  let sh='';
+  const es=d.spans?.exact||[],ps=d.spans?.paraphrase||[];
+  if(!es.length&&!ps.length)sh='<div style="padding:12px;color:var(--text3);font-size:13px">No matching spans above threshold.</div>';
+  if(es.length){sh+=`<div class="span-group-title">🔴 Exact / High Similarity (≥95%)</div>`;es.forEach(s=>{sh+=spanCard(s,'#f04d4d')})}
+  if(ps.length){sh+=`<div class="span-group-title">🟡 Paraphrase (80–95%)</div>`;ps.forEach(s=>{sh+=spanCard(s,'#f5a623')})}
+  so.innerHTML=sh;
+
+  // AI gauges — compare tab
+  const ag=document.getElementById('ai-gauges');
+  const ai_a=d.ai_detection?.doc_a||{},ai_b=d.ai_detection?.doc_b||{};
+  ag.innerHTML=richCompareGauge('Document A',d.doc_a?.name||'Doc A',ai_a)+richCompareGauge('Document B',d.doc_b?.name||'Doc B',ai_b);
+
+  // Pipeline
+  const icons={'preprocessing':'🧹','deduplication':'🔍','embedding':'🧠','cosine':'📐','spans':'🎯'};
+  document.getElementById('pipeline-stages').innerHTML=Object.entries(d.pipeline_stages||{}).map(([k,v])=>
+    `<div class="stage-row"><span class="stage-icon">${icons[k]||'⚙️'}</span><span class="stage-key">${k}</span><span class="stage-val">${v}</span></div>`
+  ).join('');
+  document.getElementById('res-compare').classList.add('on');
+}
+
+function richCompareGauge(label,name,ai){
+  const prob=ai.ai_probability||0;
+  const col=prob>=75?'#f04d4d':prob>=50?'#f5a623':prob>=31?'#f0b429':'#10d97e';
+  const vl=ai.verdict_label||(prob>=75?'Highly AI Generated':prob>=50?'Possibly AI Generated':prob>=31?'Uncertain':'Likely Human Written');
+  const subs=ai.signals?.heuristic?.sub_scores||{};
+  const subBars=Object.entries({
+    perplexity:[subs.perplexity||0,30],
+    burstiness:[subs.burstiness||0,20],
+    repetition:[subs.repetition||0,15],
+    'formal tone':[subs.formal_tone||0,15],
+    vocabulary:[subs.vocabulary||0,10],
+  }).map(([k,[v,max]])=>{
+    const barCol=v>max*0.6?'#f04d4d':v>max*0.3?'#f5a623':'#3d8ef8';
+    return `<div class="subscore-row">
+      <span class="subscore-label">${k}</span>
+      <div class="subscore-track"><div class="subscore-fill" style="width:${Math.round((v/max)*100)}%;background:${barCol}"></div></div>
+      <span class="subscore-num">${v}</span>
+    </div>`;
+  }).join('');
+  const reasons=(ai.explanation||ai.signals?.heuristic?.reasons||[]).slice(0,4);
+  const reasonsHTML=reasons.length?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px">
+    ${reasons.map(r=>{const isAI=r.startsWith('✔');return `<div style="font-size:10px;padding:4px 8px;border-radius:4px;background:${isAI?'rgba(240,77,77,.07)':'rgba(16,217,126,.06)'};border-left:2px solid ${isAI?'#f04d4d':'#10d97e'};color:var(--text2);line-height:1.4">${esc(r)}</div>`}).join('')}
+  </div>`:''
+  return `<div class="ai-gauge">
+    <div class="ai-doc-name">${label}: ${esc(name)}</div>
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <div class="ai-pct" style="color:${col}">${prob}%</div>
+      <div class="ai-verdict-line">${esc(vl)}</div>
+    </div>
+    <div class="ai-bar-bg"><div class="ai-bar-fg" style="width:${prob}%;background:${col}"></div></div>
+    <div style="margin-top:10px">${subBars}</div>
+    ${reasonsHTML}
+  </div>`;
+}
+
+function spanCard(s,color){
+  return `<div class="span-pair">
+    <div class="span-pair-row">
+      <div class="span-sent"><em>Document A</em>${esc(s.doc_a)}</div>
+      <div class="span-sent"><em>Document B</em>${esc(s.doc_b)}</div>
+    </div>
+    <div class="span-score" style="color:${color}">similarity: ${(s.score||0).toFixed(3)}</div>
+  </div>`;
+}
+
+// ── AI Detect ─────────────────────────────────────────────────────────────────
+async function runAIDetect(){
+  const text=document.getElementById('ai-text').value.trim();
+  if(text.split(/\s+/).length<10){showErr('err-ai','Please enter at least 10 words.');return}
+  setLoading('ai',true);
+  try{
+    const r=await fetch('/api/ai-detect/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    const data=await r.json();
+    setLoading('ai',false);
+    if(data.error){showErr('err-ai',data.error);return}
+    renderAI(data);
+  }catch(e){setLoading('ai',false);showErr('err-ai','Request failed: '+e.message)}
+}
+
+function renderAI(data){
+  const prob=data.ai_probability||0;
+  const col=prob>=75?'#f04d4d':prob>=50?'#f5a623':prob>=31?'#f0b429':'#10d97e';
+  const vl=data.verdict_label||(prob>=75?'Highly AI Generated':prob>=50?'Possibly AI Generated':prob>=31?'Uncertain':'Likely Human Written');
+  const vcls=prob>=75?'exact':prob>=50?'high':prob>=31?'moderate':'unique';
+
+  // Big score
+  document.getElementById('ai-pct-big').textContent=prob+'%';
+  document.getElementById('ai-pct-big').style.color=col;
+  document.getElementById('ai-verdict-label').textContent=vl;
+  document.getElementById('ai-verdict-label').style.color=col;
+  const vb=document.getElementById('ai-verdict-single');
+  vb.textContent=(prob>=50?'🤖':'✅')+' '+vl;
+  vb.className='verdict '+vcls;
+
+  // Ring
+  const ring=document.getElementById('ai-ring-fg');
+  const circ=415;
+  ring.style.strokeDashoffset=circ-(prob/100)*circ;
+  ring.style.stroke=col;
+  document.getElementById('ai-ring-num').textContent=prob+'%';
+  document.getElementById('ai-ring-num').style.fill=col;
+  document.getElementById('ai-ring-verdict').textContent=vl.toUpperCase();
+  document.getElementById('ai-ring-verdict').style.color=col;
+
+  // Signal bars
+  const signals=data.signals||{};
+  const heur=signals.heuristic||{};
+  const subs=heur.sub_scores||{};
+  const signalDefs=[
+    {key:'Transformer', val:signals.transformer?.probability??null, max:100, col:'#9b6cf7'},
+    {key:'Heuristic', val:heur.probability??null, max:100, col:col},
+    {key:'Stylometric', val:signals.stylometric?.style_score??null, max:100, col:'#3d8ef8'},
+    {key:'Perplexity', val:signals.perplexity_score??null, max:35, col:'#00d4c8'},
+    {key:'Semantic', val:signals.semantic_score??null, max:20, col:'#f0b429'},
+  ];
+  document.getElementById('signal-bars-content').innerHTML=signalDefs.map(s=>{
+    if(s.val===null)return `<div class="signal-bar-row"><span class="signal-bar-name">${s.key}</span><div class="signal-bar-track"><div class="signal-bar-fill" style="width:0%;background:${s.col}"></div></div><span class="signal-bar-val" style="color:var(--text3)">N/A</span></div>`;
+    const pct=Math.round((s.val/s.max)*100);
+    return `<div class="signal-bar-row">
+      <span class="signal-bar-name">${s.key}</span>
+      <div class="signal-bar-track"><div class="signal-bar-fill" style="width:${pct}%;background:${s.col}"></div></div>
+      <span class="signal-bar-val" style="color:${s.col}">${s.val}</span>
+    </div>`;
+  }).join('');
+
+  // Sub-score breakdown
+  const sbDefs=[
+    {k:'Perplexity',v:subs.perplexity||0,max:30},
+    {k:'Burstiness',v:subs.burstiness||0,max:20},
+    {k:'Repetition',v:subs.repetition||0,max:15},
+    {k:'Formal Tone',v:subs.formal_tone||0,max:15},
+    {k:'Vocabulary',v:subs.vocabulary||0,max:10},
+    {k:'Human –',v:subs.human_signals||0,max:10,neg:true},
+  ];
+  document.getElementById('score-breakdown-grid').innerHTML=sbDefs.map(s=>{
+    const pct=Math.round((s.v/s.max)*100);
+    const c=s.neg?'#10d97e':pct>66?'#f04d4d':pct>33?'#f5a623':'#3d8ef8';
+    return `<div class="sb-item">
+      <div class="sb-val" style="color:${c}">${s.neg?'-':''}${s.v}<span style="font-size:10px;color:var(--text3)">/${s.max}</span></div>
+      <div class="sb-key">${s.k}</div>
+    </div>`;
+  }).join('');
+
+  // Reasons / explainability
+  const reasons=data.explanation||heur.reasons||[];
+  document.getElementById('ai-reasons-list').innerHTML=reasons.length
+    ? reasons.map(r=>{
+        const isAI=r.startsWith('✔');
+        const isHuman=r.startsWith('✘');
+        const cls=isAI?'ai-signal':isHuman?'human-signal':'neutral';
+        return `<div class="reason-item ${cls}">
+          <span class="reason-icon">${isAI?'🔴':isHuman?'🟢':'⚪'}</span>
+          <span>${esc(r)}</span>
+        </div>`;
+      }).join('')
+    : '<div style="color:var(--text3);font-size:13px">No detailed reasons available.</div>';
+
+  // Feature measurements
+  const feats=heur.features||{};
+  const featDefs=[
+    {k:'Burstiness',v:feats.burstiness},
+    {k:'Sent Variance',v:feats.sentence_variance},
+    {k:'TTR',v:feats.ttr},
+    {k:'Hapax Ratio',v:feats.hapax_ratio},
+    {k:'Passive Rate',v:feats.passive_voice_ratio},
+    {k:'Transition Density',v:feats.transition_ratio_per_sentence},
+    {k:'Academic Vocab',v:feats.academic_vocab_ratio},
+    {k:'Bigram Repeat',v:feats.bigram_repeat_ratio},
+    {k:'Trigram Repeat',v:feats.trigram_repeat_ratio},
+    {k:'Opener Repeat',v:feats.sentence_opener_repeat_ratio},
+    {k:'Contractions',v:feats.contractions_count},
+    {k:'Hedge Words',v:feats.hedge_words_count},
+  ];
+  document.getElementById('feat-grid').innerHTML=featDefs.map(f=>{
+    const val=f.v===null||f.v===undefined?'—':(typeof f.v==='number'&&f.v%1!==0?f.v.toFixed(3):f.v);
+    return `<div class="feat-card"><div class="feat-val">${val}</div><div class="feat-key">${f.k}</div></div>`;
+  }).join('');
+
+  // Method info
+  const trans=signals.transformer||{};
+  document.getElementById('method-info').innerHTML=[
+    {k:'Transformer',v:trans.available?'✓ Active':'✗ Unavailable',c:trans.available?'var(--green)':'var(--text3)'},
+    {k:'Heuristic Engine',v:'✓ Active',c:'var(--green)'},
+    {k:'GPT-2 Perplexity',v:signals.perplexity!==null?('PPL: '+signals.perplexity):'✗ Unavailable',c:signals.perplexity!==null?'var(--cyan)':'var(--text3)'},
+    {k:'Semantic (SBERT)',v:signals.semantic_uniformity>0?signals.semantic_uniformity.toFixed(3):'✗ Unavailable',c:signals.semantic_uniformity>0?'var(--text)':'var(--text3)'},
+  ].map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">${m.k}</span>
+      <span style="font-size:11px;color:${m.c};font-family:var(--font-mono)">${m.v}</span>
+    </div>`).join('');
+
+  document.getElementById('res-ai').classList.add('on');
+}
+
+// ── Batch ─────────────────────────────────────────────────────────────────────
+async function runBatch(){
+  if(!_batchFiles.length)return;
+  setLoading('batch',true);
+  const form=new FormData();
+  _batchFiles.forEach(f=>form.append('documents',f));
+  try{
+    const r=await fetch('/api/upload/',{method:'POST',body:form});
+    const data=await r.json();
+    setLoading('batch',false);
+    if(data.error){showErr('err-batch',data.error);return}
+    document.getElementById('b-processed').textContent=data.processed||0;
+    document.getElementById('b-clusters').textContent=data.clusters||0;
+    const cl=data.cluster_details||{},pairs=data.pairwise_similarity||[];
+    let simHTML='';
+    if(pairs.length){
+      simHTML+=`<div style="margin-top:20px;font-family:var(--font-mono);font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em">Pairwise Similarity</div>`;
+      simHTML+=pairs.map(p=>{
+        const c=p.percentage>=80?'#f04d4d':p.percentage>=60?'#f5a623':'#10d97e';
+        return `<div style="background:var(--bg2);border:1px solid var(--border);border-left:4px solid ${c};border-radius:8px;padding:12px;margin-top:10px">
+          <div style="font-weight:600">${p.doc_a} ↔ ${p.doc_b}</div>
+          <div style="margin-top:6px;color:${c};font-weight:700;font-size:18px;font-family:var(--font-mono)">${p.percentage}%</div>
+          <div style="margin-top:4px;font-size:12px;color:var(--text3);font-family:var(--font-mono)">cosine = ${p.cosine_similarity}</div>
+        </div>`;
+      }).join('');
+    }
+    const cd=document.getElementById('b-cluster-details');
+    if(Object.keys(cl).length){
+      cd.innerHTML='<div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Cluster Groups</div>'+
+        Object.entries(cl).map(([k,v])=>`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:12px">
+          <strong>Cluster ${k}</strong> (${v.length} docs): ${v.slice(0,4).map(esc).join(' · ')}${v.length>4?`<span style="color:var(--text3)"> +${v.length-4} more</span>`:''}</div>`
+        ).join('');
+    }else{cd.innerHTML=''}
+    document.getElementById('b-similarity-details').innerHTML=simHTML;
+    document.getElementById('res-batch').classList.add('on');
+  }catch(e){setLoading('batch',false);showErr('err-batch','Request failed: '+e.message)}
+}
+
+// ── Dataset / Eval ────────────────────────────────────────────────────────────
+async function runDataset(){
+  setLoading('ds',true);
+  const outDir=document.getElementById('output-dir').value.trim();
+  const body=outDir?{output_dir:outDir}:{};
+  try{
+    const r=await fetch('/api/dataset-run/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await r.json();
+    setLoading('ds',false);
+    if(data.error){showErr('err-ds',data.error);return}
+    renderDatasetResult(data);
+  }catch(e){setLoading('ds',false);showErr('err-ds','Request failed: '+e.message)}
+}
+async function runEval(dataset){
+  setLoading('ds',true);
+  try{
+    const r=await fetch('/api/evaluate/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataset})});
+    const data=await r.json();
+    setLoading('ds',false);
+    if(data.error){showErr('err-ds',data.error);return}
+    renderEvalResult(data,dataset);
+  }catch(e){setLoading('ds',false);showErr('err-ds','Request failed: '+e.message)}
+}
+function renderDatasetResult(data){
+  document.getElementById('ds-stat-grid').innerHTML=[['Total Input',data.total_input||0],['Unique Docs',data.unique_docs||0],['Clusters',data.clusters||0],['XML Written',data.xml_written||0]]
+    .map(([k,v])=>`<div class="stat"><div class="stat-val">${v}</div><div class="stat-key">${k}</div></div>`).join('');
+  document.getElementById('res-ds').classList.add('on');
+}
+function renderEvalResult(data,dataset){
+  const metrics=['precision','recall','f1','granularity'];
+  document.getElementById('ds-eval-table').innerHTML=`
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Evaluation vs ${dataset.toUpperCase()}</div>
+    <table class="eval-table">
+      <thead><tr><th>Metric</th><th>Score</th><th>Bar</th></tr></thead>
+      <tbody>${metrics.filter(m=>data[m]!==undefined).map(m=>`
+        <tr>
+          <td style="font-weight:500">${m.charAt(0).toUpperCase()+m.slice(1)}</td>
+          <td style="font-family:var(--font-mono);color:var(--gold)">${(data[m]*100||0).toFixed(1)}%</td>
+          <td><div class="metric-bar-wrap"><div class="metric-bar"><div class="metric-bar-fill" style="width:${(data[m]||0)*100}%"></div></div></div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  document.getElementById('res-ds').classList.add('on');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function clearCompare(){
+  ['a','b'].forEach(s=>{clearFile(s);document.getElementById('text-'+s).value=''});
+  document.getElementById('res-compare').classList.remove('on');
+  [1,2,3,4,5,6].forEach(i=>document.getElementById('ls'+i).className='lstep');
+  hideErr('err-compare');
+}
+function setLoading(tab,on){
+  document.getElementById('loader-'+tab).classList.toggle('on',on);
+  if(on){document.getElementById('res-'+tab).classList.remove('on');hideErr('err-'+tab)}
+}
+function showErr(id,msg){const el=document.getElementById(id);el.textContent='⚠ '+msg;el.style.display='block'}
+function hideErr(id){document.getElementById(id).style.display='none'}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+</script>
+</body>
+</html>
